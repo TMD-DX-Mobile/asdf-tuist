@@ -3,6 +3,7 @@
 set -euo pipefail
 
 GH_REPO="https://github.com/tuist/tuist"
+ARTIFACTORY_REPO="https://repo.artifactory-dogen.group.echonet/artifactory/Tuist"
 TOOL_NAME="tuist"
 TOOL_TEST="tuist --help"
 
@@ -13,8 +14,13 @@ fail() {
 
 curl_opts=(-fsSL)
 
-if [ -n "${GITHUB_API_TOKEN:-}" ]; then
-	curl_opts=("${curl_opts[@]}" -H "Authorization: token $GITHUB_API_TOKEN")
+if [ -n "${HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN:-}" ]; then
+	curl_opts=("${curl_opts[@]}" -H "Authorization: Basic $HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN")
+else
+	echo "Please make sure that your mac is properly configured to access Artifactory:"
+	echo "- https://bnpp-lbc.atlassian.net/wiki/spaces/RH/pages/4263739396"
+	echo "- https://github.com/TMD-DX-Mobile/workstation-toolbox"
+	exit 1
 fi
 
 list_github_tags_sorted() {
@@ -35,7 +41,7 @@ download_release() {
 	version="$1"
 	filename="$2"
 
-	url="$GH_REPO/releases/download/${version}/tuist.zip"
+	url="$ARTIFACTORY_REPO/releases/download/${version}/tuist.zip"
 
 	echo "* Downloading $TOOL_NAME release $version..."
 	curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"

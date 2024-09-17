@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
+
+TOOL_NAME="tuist"
+TOOL_TEST="tuist --help"
 
 GH_REPO="https://github.com/tuist/tuist"
 ARTIFACTORY_REPO="https://repo.artifactory-dogen.group.echonet/artifactory/Tuist"
-TOOL_NAME="tuist"
-TOOL_TEST="tuist --help"
 
 fail() {
 	echo -e "asdf-$TOOL_NAME: $*"
@@ -14,13 +14,26 @@ fail() {
 
 curl_opts=(-fsSL)
 
-if [ -n "${HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN:-}" ]; then
-	curl_opts=("${curl_opts[@]}" -H "Authorization: Basic $HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN")
+# If we find the "BNPP Root Interception Externe" certificate in Keychain,
+# that mean we're in managed environment… so we use Artifactory,
+# otherwise we use Github for our download.
+if security find-certificate -c "BNPP Root Interception Externe" > /dev/null; then
+	DOWNLOAD_BASE_URL=$ARTIFACTORY_REPO
+
+	if [ -n "${HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN:-}" ]; then
+		curl_opts=("${curl_opts[@]}" -H "Authorization: Basic $HOMEBREW_DOCKER_REGISTRY_BASIC_AUTH_TOKEN")
+	else
+		echo "Please make sure that your mac is properly configured to access Artifactory:"
+		echo "- https://bnpp-lbc.atlassian.net/wiki/spaces/RH/pages/4263739396"
+		echo "- https://github.com/TMD-DX-Mobile/workstation-toolbox"
+		exit 1
+	fi
 else
-	echo "Please make sure that your mac is properly configured to access Artifactory:"
-	echo "- https://bnpp-lbc.atlassian.net/wiki/spaces/RH/pages/4263739396"
-	echo "- https://github.com/TMD-DX-Mobile/workstation-toolbox"
-	exit 1
+	DOWNLOAD_BASE_URL=$GH_REPO
+
+	if [ -n "${GITHUB_API_TOKEN:-}" ]; then
+		curl_opts=("${curl_opts[@]}" -H "Authorization: token $GITHUB_API_TOKEN")
+	fi
 fi
 
 list_github_tags_sorted() {
@@ -41,7 +54,7 @@ download_release() {
 	version="$1"
 	filename="$2"
 
-	url="$ARTIFACTORY_REPO/releases/download/${version}/tuist.zip"
+	url="$DOWNLOAD_BASE_URL/releases/download/${version}/tuist.zip"
 
 	echo "* Downloading $TOOL_NAME release $version..."
 	curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"
